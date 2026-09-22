@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Конфигуратор модульных домов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root{
+  --bg:#12161a; --panel:#1a2027; --panel2:#20272f; --line:#2b333c;
+  --accent:#ff7a3d; --accent2:#5db9c9; --text:#e9ebee; --text-dim:#8b96a3;
+  --grid-empty:#232b33; --grid-active:#33424f; --grid-hover:#3a4a58;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f2f1ec; --panel:#ffffff; --panel2:#eceae2; --line:#d8d5cb;
+    --accent:#e05a2b; --accent2:#227d8f; --text:#1c1f22; --text-dim:#6b6f74;
+    --grid-empty:#e4e1d7; --grid-active:#c9d9dc; --grid-hover:#b7cdd1;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f2f1ec; --panel:#ffffff; --panel2:#eceae2; --line:#d8d5cb;
+  --accent:#e05a2b; --accent2:#227d8f; --text:#1c1f22; --text-dim:#6b6f74;
+  --grid-empty:#e4e1d7; --grid-active:#c9d9dc; --grid-hover:#b7cdd1;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+header{padding:18px 24px 14px;border-bottom:1px solid var(--line);}
+header h1{margin:0 0 4px;font-size:20px;font-weight:600;letter-spacing:-0.01em;}
+header p{margin:0;color:var(--text-dim);font-size:13px;}
+.wrap{display:flex;flex-wrap:wrap;gap:16px;padding:16px;max-width:1400px;margin:0 auto;}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;}
+.panel h2{margin:0 0 12px;font-size:13px;font-weight:600;color:var(--text-dim);text-transform:none;}
+.col-plan{flex:0 0 340px;}
+.col-3d{flex:1 1 460px;min-width:320px;}
+.col-cost{flex:0 0 340px;}
+#planCanvas{background:var(--panel2);border-radius:4px;cursor:pointer;display:block;touch-action:none;}
+.plan-hint{color:var(--text-dim);font-size:12px;margin-top:10px;line-height:1.5;}
+#viewport{width:100%;height:420px;border-radius:4px;overflow:hidden;background:var(--panel2);position:relative;}
+#viewport canvas{display:block;}
+.view-hint{position:absolute;bottom:8px;left:10px;color:var(--text-dim);font-size:11px;}
+.stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.stat-row:last-child{border-bottom:none;}
+.stat-row .v{color:var(--accent2);font-weight:600;}
+.stat-total{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);}
+.stat-total .label{font-size:13px;color:var(--text-dim);}
+.stat-total .val{font-size:24px;font-weight:600;color:var(--accent);}
+label.field{display:block;margin-top:14px;font-size:12px;color:var(--text-dim);}
+input[type=number]{width:100%;margin-top:5px;padding:8px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:13px;}
+input[type=number]:focus{outline:1px solid var(--accent2);}
+.btnrow{display:flex;gap:8px;margin-top:14px;}
+button{flex:1;padding:9px 10px;border-radius:4px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;}
+button:hover{border-color:var(--accent2);}
+button.clear{color:#c96a4f;}
+.floor-tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+.floor-tab{padding:6px 12px;border-radius:4px;border:1px solid var(--line);background:var(--panel2);color:var(--text-dim);font-size:12px;cursor:pointer;font-family:'IBM Plex Mono',monospace;}
+.floor-tab.active{border-color:var(--accent);color:var(--accent);background:var(--panel);}
+.floor-tab.add{color:var(--accent2);border-style:dashed;}
+.floor-tab.remove{color:#c96a4f;border-style:dashed;}
+@media (max-width:900px){
+  .wrap{flex-direction:column;}
+  .col-plan,.col-cost{flex:1 1 auto;}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Конфигуратор модульных домов</h1>
+  <p>Ячеистый металлокаркас · шаг сетки 2400×2400 мм · высота ячейки 3000 мм · толщина стены 200 мм</p>
+</header>
+<div class="wrap">
+  <div class="panel col-plan">
+    <h2>ПЛАН — нажмите на ячейку, чтобы добавить/убрать</h2>
+    <div class="floor-tabs" id="floorTabs"></div>
+    <canvas id="planCanvas" width="320" height="320"></canvas>
+    <div class="plan-hint">Клик по ячейке — добавить/убрать помещение.<br>Клик по кружку на границе двух ячеек — поставить или снять стену между ними (пунктир = проём, сплошная точка = стена). Так можно собрать комнату из 1, 2, 4, 6 ячеек, оставив нужные перегородки.<br>Серый пунктирный контур — план этажа ниже, для выравнивания стен и лестниц.</div>
+    <div class="btnrow">
+      <button id="btnDemo">Пример компоновки</button>
+      <button id="btnClear" class="clear">Очистить этаж</button>
+    </div>
+  </div>
+
+  <div class="panel col-3d">
+    <h2>3D-ВИЗУАЛИЗАЦИЯ</h2>
+    <div id="viewport"><span class="view-hint">🖱 зажмите и тяните — вращение, колесо — масштаб</span></div>
+  </div>
+
+  <div class="panel col-cost">
+    <h2>ПАРАМЕТРЫ И СТОИМОСТЬ</h2>
+    <div class="stat-row"><span>Этажей</span><span class="v mono" id="statFloors">1</span></div>
+    <div class="stat-row"><span>Ячеек в конфигурации</span><span class="v mono" id="statCells">0</span></div>
+    <div class="stat-row"><span>Модулей (связных групп)</span><span class="v mono" id="statModules">0</span></div>
+    <div class="stat-row"><span>Внутренняя площадь</span><span class="v mono" id="statArea">0 м²</span></div>
+    <div class="stat-row"><span>Габаритная площадь этажей</span><span class="v mono" id="statFootprint">0 м²</span></div>
+    <label class="field">Цена за ячейку, ₽
+      <input type="number" id="priceCell" value="780000" step="10000">
+    </label>
+    <label class="field">Цена монтажа/логистики за ячейку, ₽
+      <input type="number" id="priceInstall" value="120000" step="10000">
+    </label>
+    <div class="stat-total"><span class="label">Предварительная стоимость</span><span class="val mono" id="statTotal">0 ₽</span></div>
+  </div>
+</div>
+
+<script>
+// ---- grid state ----
+const GRID_RANGE = 4; // cells from -4..4
+const CELL_M = 2.4, WALL_M = 0.2, HEIGHT_M = 3.0, INNER_M = 2.2;
+const key = (x,y)=>x+','+y;
+function edgeKey(ax,ay,bx,by){
+  let a=[ax,ay], b=[bx,by];
+  if(a[0]>b[0] || (a[0]===b[0] && a[1]>b[1])) { const tmp=a; a=b; b=tmp; }
+  return a[0]+','+a[1]+'|'+b[0]+','+b[1];
+}
+let edgeHandles = []; // пересчитывается при каждой отрисовке плана
+
+function newFloor(){ return {cells:new Set(), wallOverrides:new Map()}; }
+const floorsData = [newFloor()];
+let currentFloor = 0;
+const curCells = ()=>floorsData[currentFloor].cells;
+const curWalls = ()=>floorsData[currentFloor].wallOverrides;
+
+function renderFloorTabs(){
+  const box = document.getElementById('floorTabs');
+  box.innerHTML = '';
+  floorsData.forEach((f,i)=>{
+    const b = document.createElement('button');
+    b.className = 'floor-tab'+(i===currentFloor?' active':'');
+    b.textContent = (i+1)+' этаж';
+    b.onclick = ()=>{ currentFloor=i; renderFloorTabs(); drawPlan(); updateStats(); };
+    box.appendChild(b);
+  });
+  const add = document.createElement('button');
+  add.className = 'floor-tab add';
+  add.textContent = '+ этаж';
+  add.onclick = ()=>{
+    const src = floorsData[floorsData.length-1];
+    const nf = newFloor();
+    src.cells.forEach(c=>nf.cells.add(c));
+    src.wallOverrides.forEach((v,k)=>nf.wallOverrides.set(k,v));
+    floorsData.push(nf);
+    currentFloor = floorsData.length-1;
+    radius = Math.max(radius, 10+floorsData.length*4);
+    renderFloorTabs(); drawPlan(); rebuild3D(); updateStats(); updateCam();
+  };
+  box.appendChild(add);
+  if(floorsData.length>1 && currentFloor===floorsData.length-1){
+    const rm = document.createElement('button');
+    rm.className = 'floor-tab remove';
+    rm.textContent = 'Удалить этаж';
+    rm.onclick = ()=>{
+      floorsData.pop();
+      currentFloor = floorsData.length-1;
+      renderFloorTabs(); drawPlan(); rebuild3D(); updateStats();
+    };
+    box.appendChild(rm);
+  }
+}
+
+function seedDemo(){
+  const f = floorsData[currentFloor];
+  f.cells.clear(); f.wallOverrides.clear();
+  [[0,0],[1,0],[0,1],[1,1],[0,-1],[-1,0]].forEach(([x,y])=>f.cells.add(key(x,y)));
+}
+seedDemo();
+renderFloorTabs();
+
+// ---- 2D plan canvas ----
+const planCanvas = document.getElementById('planCanvas');
+const ctx = planCanvas.getContext('2d');
+const CELL_PX = 32, ORIGIN = planCanvas.width/2;
+
+function pxToGrid(px, py){
+  return [Math.floor((px-ORIGIN)/CELL_PX), Math.floor((py-ORIGIN)/CELL_PX)];
+}
+
+function drawPlan(){
+  const css = getComputedStyle(document.documentElement);
+  const cAccent = css.getPropertyValue('--accent').trim();
+  const cDim = css.getPropertyValue('--text-dim').trim();
+  const cHover = css.getPropertyValue('--grid-hover').trim();
+  const cells = curCells(), wallOverrides = curWalls();
+  const belowCells = currentFloor>0 ? floorsData[currentFloor-1].cells : null;
+  ctx.clearRect(0,0,planCanvas.width,planCanvas.height);
+  edgeHandles = [];
+  const processed = new Set();
+
+  for(let gx=-GRID_RANGE; gx<GRID_RANGE; gx++){
+    for(let gy=-GRID_RANGE; gy<GRID_RANGE; gy++){
+      const active = cells.has(key(gx,gy));
+      ctx.fillStyle = active ? css.getPropertyValue('--grid-active').trim() : css.getPropertyValue('--grid-empty').trim();
+      ctx.fillRect(ORIGIN+gx*CELL_PX+1, ORIGIN+gy*CELL_PX+1, CELL_PX-2, CELL_PX-2);
+      if(belowCells && belowCells.has(key(gx,gy)) && !active){
+        ctx.strokeStyle = cDim; ctx.lineWidth = 1; ctx.setLineDash([3,2]);
+        ctx.strokeRect(ORIGIN+gx*CELL_PX+3, ORIGIN+gy*CELL_PX+3, CELL_PX-6, CELL_PX-6);
+        ctx.setLineDash([]);
+      }
+      if(!active) continue;
+      const x0=ORIGIN+gx*CELL_PX, y0=ORIGIN+gy*CELL_PX;
+      const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+      dirs.forEach(([dx,dy])=>{
+        const nx=gx+dx, ny=gy+dy;
+        const neighborActive = cells.has(key(nx,ny));
+        let sx0,sy0,sx1,sy1;
+        if(dx===1){sx0=x0+CELL_PX;sy0=y0;sx1=x0+CELL_PX;sy1=y0+CELL_PX;}
+        if(dx===-1){sx0=x0;sy0=y0;sx1=x0;sy1=y0+CELL_PX;}
+        if(dy===1){sx0=x0;sy0=y0+CELL_PX;sx1=x0+CELL_PX;sy1=y0+CELL_PX;}
+        if(dy===-1){sx0=x0;sy0=y0;sx1=x0+CELL_PX;sy1=y0;}
+        if(!neighborActive){
+          ctx.strokeStyle = cAccent; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(sx0,sy0); ctx.lineTo(sx1,sy1); ctx.stroke();
+          return;
+        }
+        const ek = edgeKey(gx,gy,nx,ny);
+        if(processed.has(ek)) return;
+        processed.add(ek);
+        const hasWall = wallOverrides.get(ek) === true;
+        const mx=(sx0+sx1)/2, my=(sy0+sy1)/2;
+        if(hasWall){
+          ctx.strokeStyle = cAccent; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(sx0,sy0); ctx.lineTo(sx1,sy1); ctx.stroke();
+        } else {
+          ctx.strokeStyle = cDim; ctx.lineWidth = 1; ctx.setLineDash([2,3]);
+          ctx.beginPath(); ctx.moveTo(sx0,sy0); ctx.lineTo(sx1,sy1); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        // кликабельная метка посередине границы
+        ctx.beginPath(); ctx.arc(mx,my,5,0,Math.PI*2);
+        ctx.fillStyle = hasWall ? cAccent : css.getPropertyValue('--panel').trim();
+        ctx.fill();
+        ctx.lineWidth=1.5; ctx.strokeStyle = hasWall ? cAccent : cHover; ctx.stroke();
+        edgeHandles.push({ek, x:mx, y:my});
+      });
+    }
+  }
+}
+
+planCanvas.addEventListener('click', e=>{
+  const rect = planCanvas.getBoundingClientRect();
+  const px = (e.clientX-rect.left)*(planCanvas.width/rect.width);
+  const py = (e.clientY-rect.top)*(planCanvas.height/rect.height);
+  const cells = curCells(), wallOverrides = curWalls();
+
+  const hit = edgeHandles.find(h => Math.hypot(h.x-px, h.y-py) <= 9);
+  if(hit){
+    wallOverrides.set(hit.ek, wallOverrides.get(hit.ek) !== true);
+    drawPlan(); rebuild3D(); updateStats();
+    return;
+  }
+
+  const [gx,gy] = pxToGrid(px,py);
+  const k = key(gx,gy);
+  if(cells.has(k)){
+    cells.delete(k);
+    [...wallOverrides.keys()].forEach(ek=>{ if(ek.includes(gx+','+gy)) wallOverrides.delete(ek); });
+  } else {
+    cells.add(k);
+  }
+  drawPlan(); rebuild3D(); updateStats();
+});
+
+document.getElementById('btnDemo').onclick = ()=>{seedDemo(); drawPlan(); rebuild3D(); updateStats();};
+document.getElementById('btnClear').onclick = ()=>{curCells().clear(); curWalls().clear(); drawPlan(); rebuild3D(); updateStats();};
+
+// ---- connected component count (module grouping), для одного этажа ----
+function countModulesFor(cells){
+  const seen = new Set();
+  let groups = 0;
+  cells.forEach(k=>{
+    if(seen.has(k)) return;
+    groups++;
+    const stack=[k];
+    while(stack.length){
+      const cur = stack.pop();
+      if(seen.has(cur)) continue;
+      seen.add(cur);
+      const [x,y] = cur.split(',').map(Number);
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{
+        const nk = key(x+dx,y+dy);
+        if(cells.has(nk) && !seen.has(nk)) stack.push(nk);
+      });
+    }
+  });
+  return groups;
+}
+
+function updateStats(){
+  const totalCells = floorsData.reduce((s,f)=>s+f.cells.size,0);
+  const totalModules = floorsData.reduce((s,f)=>s+(f.cells.size?countModulesFor(f.cells):0),0);
+  document.getElementById('statFloors').textContent = floorsData.length;
+  document.getElementById('statCells').textContent = totalCells;
+  document.getElementById('statModules').textContent = totalModules;
+  document.getElementById('statArea').textContent = (totalCells*INNER_M*INNER_M).toFixed(1)+' м²';
+  document.getElementById('statFootprint').textContent = (totalCells*CELL_M*CELL_M).toFixed(1)+' м²';
+  const priceCell = Number(document.getElementById('priceCell').value)||0;
+  const priceInstall = Number(document.getElementById('priceInstall').value)||0;
+  const total = totalCells*(priceCell+priceInstall);
+  document.getElementById('statTotal').textContent = total.toLocaleString('ru-RU')+' ₽';
+}
+document.getElementById('priceCell').oninput = updateStats;
+document.getElementById('priceInstall').oninput = updateStats;
+
+// ---- 3D scene ----
+const viewport = document.getElementById('viewport');
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+viewport.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+let radius=14, theta=0.9, phi=1.0;
+function updateCam(){
+  const midY = Math.max(1.6, floorsData.length*HEIGHT_M/2);
+  camera.position.set(radius*Math.sin(phi)*Math.sin(theta), radius*Math.cos(phi)+midY*0.4, radius*Math.sin(phi)*Math.cos(theta));
+  camera.lookAt(0,midY,0);
+}
+updateCam();
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x33383f, 1.1));
+const dl = new THREE.DirectionalLight(0xffffff, 0.9);
+dl.position.set(6,10,4);
+scene.add(dl);
+
+const wallMat = new THREE.MeshStandardMaterial({color:0x8a929b, metalness:0.5, roughness:0.5});
+const floorMat = new THREE.MeshStandardMaterial({color:0x454e58, metalness:0.3, roughness:0.7});
+const edgeMat = new THREE.LineBasicMaterial({color:0xff7a3d});
+
+let group = new THREE.Group();
+scene.add(group);
+
+function rebuild3D(){
+  scene.remove(group);
+  group = new THREE.Group();
+  const t = WALL_M;
+  floorsData.forEach((floor, fi)=>{
+    const yBase = fi*HEIGHT_M;
+    const cells = floor.cells, wallOverrides = floor.wallOverrides;
+    const processedEdges = new Set();
+    cells.forEach(k=>{
+      const [gx,gy] = k.split(',').map(Number);
+      const cx = gx*CELL_M, cz = gy*CELL_M;
+      const floorSlab = new THREE.Mesh(new THREE.BoxGeometry(CELL_M, 0.12, CELL_M), floorMat);
+      floorSlab.position.set(cx, yBase+0.06, cz);
+      group.add(floorSlab);
+
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      dirs.forEach(([dx,dy])=>{
+        const nx=gx+dx, ny=gy+dy;
+        const neighborActive = cells.has(key(nx,ny));
+        const horizontal = dy!==0;
+        const w = horizontal ? CELL_M : t;
+        const d = horizontal ? t : CELL_M;
+        // толщина стены всегда 200мм, центр — ровно по линии сетки:
+        // на стыке двух ячеек это 100мм от одной + 100мм от другой,
+        // на внешнем контуре 100мм внутри границы + 100мм нарастает наружу
+        if(!neighborActive){
+          const wall = new THREE.Mesh(new THREE.BoxGeometry(w, HEIGHT_M, d), wallMat);
+          wall.position.set(cx + dx*(CELL_M/2), yBase+HEIGHT_M/2, cz + dy*(CELL_M/2));
+          group.add(wall);
+          return;
+        }
+        const ek = edgeKey(gx,gy,nx,ny);
+        if(processedEdges.has(ek)) return;
+        processedEdges.add(ek);
+        if(wallOverrides.get(ek) !== true) return;
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(w, HEIGHT_M, d), wallMat);
+        wall.position.set(cx + dx*(CELL_M/2), yBase+HEIGHT_M/2, cz + dy*(CELL_M/2));
+        group.add(wall);
+      });
+
+      // тонкий контур ячейки по полу — 4 точки, без объёмной геометрии
+      const hw = CELL_M/2;
+      const outlinePts = [
+        new THREE.Vector3(cx-hw, yBase+0.13, cz-hw),
+        new THREE.Vector3(cx+hw, yBase+0.13, cz-hw),
+        new THREE.Vector3(cx+hw, yBase+0.13, cz+hw),
+        new THREE.Vector3(cx-hw, yBase+0.13, cz+hw),
+      ];
+      const outlineGeom = new THREE.BufferGeometry().setFromPoints(outlinePts);
+      group.add(new THREE.LineLoop(outlineGeom, edgeMat));
+    });
+  });
+  scene.add(group);
+  camera.lookAt(0, floorsData.length*HEIGHT_M/2, 0);
+}
+rebuild3D();
+
+function resize(){
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  renderer.setSize(w,h);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+let dragging=false, lx=0, ly=0;
+viewport.addEventListener('pointerdown', e=>{dragging=true; lx=e.clientX; ly=e.clientY;});
+window.addEventListener('pointerup', ()=>dragging=false);
+window.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  theta -= (e.clientX-lx)*0.006;
+  phi = Math.min(Math.max(phi - (e.clientY-ly)*0.006, 0.3), 1.5);
+  lx=e.clientX; ly=e.clientY;
+  updateCam();
+});
+viewport.addEventListener('wheel', e=>{
+  radius = Math.min(Math.max(radius + e.deltaY*0.01, 5), 30);
+  updateCam(); e.preventDefault();
+}, {passive:false});
+
+function animate(){ requestAnimationFrame(animate); renderer.render(scene, camera); }
+animate();
+
+drawPlan();
+updateStats();
+</script>
+</body>
+</html>
